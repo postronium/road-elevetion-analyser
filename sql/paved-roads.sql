@@ -1,4 +1,4 @@
-CREATE OR REPLACE VIEW skatable_roads AS
+CREATE OR REPLACE VIEW paved_roads AS
     SELECT * FROM "public"."planet_osm_line" WHERE 
         highway IS NOT NULL AND 
         (surface IS NULL OR surface IN ('asphalt', 'paved', 'chipseal')) AND 

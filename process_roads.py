@@ -175,31 +175,11 @@ class RoadPropertyCalculator:
 
     def __init__(self):
         self.segment_size = 100
-        self.elevation_map = ElevationMap(('.\\1-arc-sec-de-nrw\\'))
+        self.elevation_map = ElevationMap(('.\\1-arc-sec-dem\\'))
         
     def coords_as_lat_lon(self, coords):
         lon, lat = transformer.transform(coords[0], coords[1])
         return (lat, lon)
-
-    def get_road_property(self, road: Road) -> RoadProperty:
-        curviness = RoadPropertyCalculator.calc_curviness(road)
-        segment_curviness = self.calc_segment_curviness(road)
-        curves_classes = RoadPropertyCalculator.curvy_metrics(segment_curviness)
-        total_elevation = self.calculate_total_elevation(road)
-
-        properties = RoadProperty(road.osm_id)
-
-        properties.total_curviness = curviness
-        properties.c_a = curves_classes[0]
-        properties.c_b = curves_classes[1]
-        properties.c_c = curves_classes[2]
-        properties.c_d = curves_classes[3]
-        properties.c_e = curves_classes[4]
-        properties.c_f = curves_classes[5]
-        properties.length = road.get_length()
-        properties.total_elevation = total_elevation
-
-        return properties
     
     def calculate_total_elevation(self, road: Road) -> float:
         start_point = self.coords_as_lat_lon(road.get_start_coord())
@@ -209,63 +189,6 @@ class RoadPropertyCalculator:
         delta_elevation = end_elevation - start_elevation
         return delta_elevation
 
-    @staticmethod
-    def calc_curviness(road: Road) -> tuple:
-        straight_line = LineString([road.get_start_coord(), road.get_end_coord()])
-        straight_length = straight_line.length
-        
-        if straight_length == 0:
-            return 0.0
-        curviness = road.get_length() / straight_length - 1
-        
-        return curviness
-
-    def calc_segment_curviness(self, road: Road) -> list:
-        curviness_values = []
-
-        i = 0
-        while i + self.segment_size <= road.get_length():
-            road_geometry = road.get_wkt_geometry()
-
-            start_point = road_geometry.interpolate(i)
-            end_point = road_geometry.interpolate(i + self.segment_size)
-
-            coords = []
-            for coord in road.get_coords():
-                if i <= road_geometry.project(Point(coord)) <= i + self.segment_size:
-                    coords.append(coord)
-            coords = [start_point.coords[0]] + coords + [end_point.coords[0]]
-            subroad = LineString(coords)
-            
-            actual_length = subroad.length
-            straight_length = LineString([start_point, end_point]).length
-            curviness = actual_length / straight_length - 1
-            
-            curviness_values.append(curviness)
-            
-            i += self.segment_size
-        
-        return curviness_values
-    
-    @staticmethod
-    def curvy_metrics(curviness):
-        curv_counter = [0, 0, 0, 0, 0, 0]
-        for c in curviness:
-            if c < 0.1:
-                curv_counter[0] += 1
-            elif c < 0.2:
-                curv_counter[1] += 1
-            elif c < 0.3:
-                curv_counter[2] += 1
-            elif c < 0.5:
-                curv_counter[3] += 1
-            elif c < 0.75:
-                curv_counter[4] += 1
-            else:
-                curv_counter[5] += 1
-
-        return curv_counter
-
 
 if __name__ == "__main__":
     load_dotenv()
@@ -273,11 +196,5 @@ if __name__ == "__main__":
     road_dao = RoadDAO(os.getenv('DB_NAME'), os.getenv('DB_USER'), os.getenv('DB_PASSWORD'), os.getenv('DB_HOST'))
 
     roads = road_dao.get_all_skatable_roads()
-
-    calculator = RoadPropertyCalculator()
-
-    road_properties = [calculator.get_road_property(road) for road in roads]
-
-    road_dao.insert_road_properties(road_properties)
 
     road_dao.close_connection()
